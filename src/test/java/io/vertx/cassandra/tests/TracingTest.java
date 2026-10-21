@@ -14,15 +14,16 @@
  * under the License.
  */
 
-package io.vertx.cassandra;
+package io.vertx.cassandra.tests;
 
+import io.vertx.cassandra.CassandraClientOptions;
 import io.vertx.cassandra.impl.tracing.QueryRequest;
 import io.vertx.core.Context;
+import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.spi.tracing.SpanKind;
 import io.vertx.core.spi.tracing.TagExtractor;
 import io.vertx.core.spi.tracing.VertxTracer;
-import io.vertx.core.tracing.TracingOptions;
 import io.vertx.core.tracing.TracingPolicy;
 import io.vertx.ext.unit.Async;
 import io.vertx.ext.unit.TestContext;
@@ -37,9 +38,10 @@ public class TracingTest extends CassandraClientTestBase {
   VertxTracer tracer;
 
   @Override
-  protected VertxOptions createVertxOptions() {
-    TracingOptions tracingOptions = new TracingOptions()
-      .setFactory(options -> new VertxTracer() {
+  protected Vertx createVertx(VertxOptions options) {
+    return Vertx.builder()
+      .with(options)
+      .withTracer(o -> new VertxTracer() {
         @Override
         public Object sendRequest(Context context, SpanKind kind, TracingPolicy policy, Object request, String operation, BiConsumer headers, TagExtractor tagExtractor) {
           return tracer.sendRequest(context, kind, policy, request, operation, headers, tagExtractor);
@@ -49,8 +51,8 @@ public class TracingTest extends CassandraClientTestBase {
         public void receiveResponse(Context context, Object response, Object payload, Throwable failure, TagExtractor tagExtractor) {
           tracer.receiveResponse(context, response, payload, failure, tagExtractor);
         }
-      });
-    return super.createVertxOptions().setTracingOptions(tracingOptions);
+      })
+      .build();
   }
 
   @Override
@@ -89,9 +91,11 @@ public class TracingTest extends CassandraClientTestBase {
       }
     };
 
-    client.executeWithFullFetch(cql, ctx.asyncAssertSuccess(rows -> {
-      async.countDown();
-    }));
+    expectedContext.runOnContext(v -> {
+      client.executeWithFullFetch(cql).onComplete(ctx.asyncAssertSuccess(rows -> {
+        async.countDown();
+      }));
+    });
   }
 
   @Test
@@ -124,7 +128,9 @@ public class TracingTest extends CassandraClientTestBase {
       }
     };
 
-    client.executeWithFullFetch(cql, ctx.asyncAssertFailure(t -> async.countDown()));
+    expectedContext.runOnContext(v -> {
+      client.executeWithFullFetch(cql).onComplete(ctx.asyncAssertFailure(t -> async.countDown()));
+    });
   }
 
   @Test
@@ -159,11 +165,12 @@ public class TracingTest extends CassandraClientTestBase {
       }
     };
 
-    client.prepare(cql, ctx.asyncAssertSuccess(ps -> {
-      client.execute(ps.bind("B"), ctx.asyncAssertSuccess(rs -> {
-        async.countDown();
+    expectedContext.runOnContext(v -> {
+      client.prepare(cql).onComplete(ctx.asyncAssertSuccess(ps -> {
+        client.execute(ps.bind("B")).onComplete(ctx.asyncAssertSuccess(rs -> {
+          async.countDown();
+        }));
       }));
-    }));
-
+    });
   }
 }

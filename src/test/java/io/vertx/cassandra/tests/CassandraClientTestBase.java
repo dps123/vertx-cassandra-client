@@ -13,12 +13,16 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package io.vertx.cassandra;
+package io.vertx.cassandra.tests;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.cql.Row;
+import io.vertx.cassandra.CassandraClient;
+import io.vertx.cassandra.CassandraClientOptions;
 import io.vertx.core.*;
-import io.vertx.core.impl.VertxInternal;
+import io.vertx.core.internal.VertxInternal;
 import io.vertx.ext.unit.Async;
 import io.vertx.ext.unit.TestContext;
 import io.vertx.ext.unit.junit.VertxUnitRunner;
@@ -29,6 +33,7 @@ import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -60,12 +65,15 @@ public abstract class CassandraClientTestBase {
     CQL_SESSION = CqlSession.builder()
       .addContactPoint(new InetSocketAddress(CASSANDRA_CONTAINER.getHost(), CASSANDRA_PORT))
       .withLocalDatacenter("datacenter1")
+      .withConfigLoader(DriverConfigLoader.programmaticBuilder()
+        .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, Duration.ofSeconds(30))
+        .build())
       .build();
   }
 
   @Before
   public void setUp() {
-    vertx = (VertxInternal) Vertx.vertx(createVertxOptions());
+    vertx = (VertxInternal) createVertx(createVertxOptions());
     client = CassandraClient.create(vertx, createClientOptions());
   }
 
@@ -73,12 +81,16 @@ public abstract class CassandraClientTestBase {
     return new VertxOptions();
   }
 
+  protected Vertx createVertx(VertxOptions options) {
+    return Vertx.vertx(options);
+  }
+
   @After
   public void tearDown(TestContext testContext) {
     final Async async = testContext.async();
-    client.close(testContext.asyncAssertSuccess(close -> async.countDown()));
+    client.close().onComplete(testContext.asyncAssertSuccess(close -> async.countDown()));
     async.await();
-    vertx.close(testContext.asyncAssertSuccess());
+    vertx.close().onComplete(testContext.asyncAssertSuccess());
   }
 
   protected CassandraClientOptions createClientOptions() {
@@ -110,7 +122,7 @@ public abstract class CassandraClientTestBase {
         String statement = String.format("INSERT INTO random_strings.random_string_by_first_letter (first_letter, random_string) VALUES ('%s', '%s%s')", c, c, randomString);
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
           CQL_SESSION.execute(statement);
-        }, vertx.getWorkerPool().executor());
+        }, vertx.workerPool().executor());
         futures.add(future);
       }
     }
@@ -127,7 +139,8 @@ public abstract class CassandraClientTestBase {
   }
 
   protected static void getCassandraReleaseVersion(CassandraClient client, Handler<AsyncResult<String>> handler) {
-    client.executeWithFullFetch("select release_version from system.local", ar -> {
+    client.executeWithFullFetch("select release_version from system.local")
+      .onComplete(ar -> {
       if (ar.succeeded()) {
         List<Row> result = ar.result();
         handler.handle(Future.succeededFuture(result.iterator().next().getString("release_version")));
@@ -135,6 +148,11 @@ public abstract class CassandraClientTestBase {
         handler.handle(Future.failedFuture(ar.cause()));
       }
     });
+  }
+
+  protected static Future<String> getCassandraReleaseVersion(CassandraClient client) {
+    return client.executeWithFullFetch("select release_version from system.local")
+      .map(result -> result.iterator().next().getString("release_version"));
   }
 
   protected static String randomClientName() {

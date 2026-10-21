@@ -20,7 +20,6 @@ import com.datastax.oss.driver.api.core.cql.ExecutionInfo;
 import com.datastax.oss.driver.api.core.cql.Row;
 import io.vertx.codegen.annotations.GenIgnore;
 import io.vertx.codegen.annotations.VertxGen;
-import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.streams.ReadStream;
@@ -60,14 +59,8 @@ public interface CassandraRowStream extends ReadStream<Row> {
     return ReadStream.super.pipeTo(dst);
   }
 
-  @GenIgnore(GenIgnore.PERMITTED_TYPE)
-  @Override
-  default void pipeTo(WriteStream<Row> dst, Handler<AsyncResult<Void>> handler) {
-    ReadStream.super.pipeTo(dst, handler);
-  }
-
   /**
-   * Get the {@link ExectionInfo} provided by the backing {@link ResultSet} for this stream.
+   * Get the {@link ExecutionInfo} provided by the backing {@link ResultSet} for this stream.
    *
    * @returns the executionInfo
    */

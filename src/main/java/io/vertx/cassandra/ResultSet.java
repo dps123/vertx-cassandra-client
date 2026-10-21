@@ -19,12 +19,9 @@ import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.ColumnDefinitions;
 import com.datastax.oss.driver.api.core.cql.ExecutionInfo;
 import com.datastax.oss.driver.api.core.cql.Row;
-import io.vertx.codegen.annotations.Fluent;
 import io.vertx.codegen.annotations.GenIgnore;
 import io.vertx.codegen.annotations.VertxGen;
-import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
-import io.vertx.core.Handler;
 
 import java.util.List;
 
@@ -38,20 +35,13 @@ import java.util.List;
 public interface ResultSet {
 
   /**
-   * Like {@link #all(Handler)} but returns a {@code Future} of the asynchronous result.
+   * The method should <strong>not</strong> be used concurrently with others like {@link #fetchNextPage()} or {@link #one()}.
+   * This may lead to unexpected result.
+   *
+   * @return a future notified all the rows are fetched
    */
   @GenIgnore(GenIgnore.PERMITTED_TYPE)
   Future<List<Row>> all();
-
-  /**
-   * The method should <strong>not</strong> be used concurrently with others like {@link #fetchNextPage()} or {@link #one(Handler)}.
-   * This may lead to unexpected result.
-   *
-   * @param handler handler called when all the rows is fetched
-   */
-  @GenIgnore(GenIgnore.PERMITTED_TYPE)
-  @Fluent
-  ResultSet all(Handler<AsyncResult<List<Row>>> handler);
 
   /**
    * @see AsyncResultSet#getColumnDefinitions()
@@ -86,11 +76,6 @@ public interface ResultSet {
    * @see AsyncResultSet#hasMorePages()
    */
   boolean hasMorePages();
-
-  /**
-   * Like {@link #fetchNextPage()} but with a direct callback.
-   */
-  void fetchNextPage(Handler<AsyncResult<ResultSet>> handler);
 
   /**
    * @see AsyncResultSet#wasApplied()

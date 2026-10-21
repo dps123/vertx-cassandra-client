@@ -20,7 +20,6 @@ import com.datastax.oss.driver.api.core.cql.ExecutionInfo;
 import com.datastax.oss.driver.api.core.cql.Row;
 import io.vertx.cassandra.ResultSet;
 import io.vertx.core.*;
-import io.vertx.core.impl.ContextInternal;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -42,15 +41,9 @@ public class ResultSetImpl implements ResultSet {
   }
 
   @Override
-  public ResultSet all(Handler<AsyncResult<List<Row>>> handler) {
-    loadMore(vertx.getOrCreateContext(), Collections.emptyList(), handler);
-    return this;
-  }
-
-  @Override
   public Future<List<Row>> all() {
     Promise<List<Row>> promise = Promise.promise();
-    all(promise);
+    loadMore(vertx.getOrCreateContext(), Collections.emptyList(), promise);
     return promise.future();
   }
 
@@ -85,14 +78,6 @@ public class ResultSetImpl implements ResultSet {
   }
 
   @Override
-  public void fetchNextPage(Handler<AsyncResult<ResultSet>> handler) {
-    Future<ResultSet> fut = fetchNextPage();
-    if (handler != null) {
-      fut.onComplete(handler);
-    }
-  }
-
-  @Override
   public Future<ResultSet> fetchNextPage() throws IllegalStateException {
     return Future.fromCompletionStage(
       resultSetRef.get().fetchNextPage(),
@@ -108,7 +93,7 @@ public class ResultSetImpl implements ResultSet {
     return resultSetRef.get().wasApplied();
   }
 
-  private void loadMore(Context context, List<Row> loaded, Handler<AsyncResult<List<Row>>> handler) {
+  private void loadMore(Context context, List<Row> loaded, Completable<List<Row>> handler) {
     int availableWithoutFetching = resultSetRef.get().remaining();
     List<Row> rows = new ArrayList<>(loaded.size() + availableWithoutFetching);
     rows.addAll(loaded);
@@ -123,13 +108,13 @@ public class ResultSetImpl implements ResultSet {
           loadMore(context, rows, handler);
         } else {
           if (handler != null) {
-            handler.handle(Future.failedFuture(ar.cause()));
+            handler.fail(ar.cause());
           }
         }
       });
     } else {
       if (handler != null) {
-        handler.handle(Future.succeededFuture(rows));
+        handler.succeed(rows);
       }
     }
   }
